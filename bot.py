@@ -29,6 +29,7 @@ DEVICE_FILE = "devices.json"
 PROXY_FILE = "proxy.txt"
 PING_INTERVAL = 90
 CHECKIN_INTERVAL = 300
+REQUEST_DELAY = 30  # Thời gian chờ trước mỗi request (giây)
 DIRECTOR_SERVER = "https://director.getgrass.io"
 
 # Phân tích tham số dòng lệnh
@@ -64,7 +65,8 @@ def parse_proxy(proxy_url: str) -> tuple:
     return parsed.scheme.lower(), parsed.hostname, parsed.port, parsed.username, parsed.password
 
 async def get_ws_endpoints(device_id: str, user_id: str, proxy_url: str) -> tuple:
-    """Fetch WebSocket endpoints and token from director server."""
+    """Fetch WebSocket endpoints and token from director server with delay."""
+    await asyncio.sleep(REQUEST_DELAY)  # Chờ 30s trước khi gửi request
     url = f"{DIRECTOR_SERVER}/checkin"
     data = {
         "browserId": device_id, "userId": user_id, "version": "5.1.1",
@@ -102,7 +104,7 @@ class WebSocketClient:
         logger.info(f"🖥️ Device: {self.device_id} | Proxy: {self.proxy_url}")
         while True:
             if self.is_connected:
-                await asyncio.sleep(5)
+                await asyncio.sleep(50)
                 continue
 
             try:
@@ -187,7 +189,7 @@ class WebSocketClient:
         await websocket.send(json.dumps({"id": message["id"], "origin_action": "PONG"}))
 
     async def _handle_http_request(self, websocket, message) -> None:
-        """Handle HTTP_REQUEST message."""
+        """Handle HTTP_REQUEST message with delay."""
         data = message.get("data", {})
         method = data.get("method", "GET").upper()
         url = data.get("url")
@@ -198,6 +200,7 @@ class WebSocketClient:
         ssl_context = ssl._create_unverified_context()
 
         try:
+            await asyncio.sleep(REQUEST_DELAY)  # Chờ 30s trước khi gửi request
             connector = ProxyConnector(proxy_type=ProxyType.SOCKS5, host=host, port=port, username=username, password=password, rdns=True) if self.proxy_url and scheme == 'socks5' else None
             async with ClientSession(connector=connector) as session:
                 async with session.request(method, url, headers=req_headers, data=body, proxy=self.proxy_url if self.proxy_url and scheme != 'socks5' else None, ssl=ssl_context) as resp:
